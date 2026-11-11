@@ -21,4 +21,15 @@ if uploaded_file is not None:
         st.error(f"Could not read this file: {error}")
     else:
         st.success(f"Loaded {len(dataset):,} rows and {len(dataset.columns):,} columns.")
+
+        st.subheader("Columns")
+        column_profile = dataset.dtypes.astype(str).rename("Detected type").to_frame()
+        column_profile.index.name = "Column"
+        st.dataframe(column_profile, use_container_width=True)
+
+        st.subheader("Missing values")
+        missing_profile = dataset.isna().sum().rename("Missing values").to_frame()
+        missing_profile.index.name = "Column"
+        st.dataframe(missing_profile, use_container_width=True)
+
         st.dataframe(dataset.head(10), use_container_width=True)

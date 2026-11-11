@@ -4,18 +4,24 @@ SPECTRUM is being built as a small, step-by-step learning project. The first rel
 
 ## Current status
 
-The app currently supports CSV and Excel (`.xlsx`) upload and a ten-row preview. Excel uploads read the first worksheet. Profiling and analysis will be added in later, separately reviewed steps.
+The app currently supports CSV and Excel (`.xlsx`) upload, row and column counts, inferred column types, per-column missing-value counts, and a ten-row preview. Excel uploads read the first worksheet. Analysis will be added in a later, separately reviewed step.
 
 ## Run locally
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+From the project folder, create and activate a virtual environment:
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+Install dependencies:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Start the app:
+Start the app:
 
    ```bash
    streamlit run app.py
