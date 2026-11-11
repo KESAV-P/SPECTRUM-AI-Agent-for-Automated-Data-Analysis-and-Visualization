@@ -26,13 +26,14 @@ class AppWorkflowTests(unittest.TestCase):
         self.assertEqual(app.dataframe[3].value.loc["Count", "Value"], 12)
         self.assertEqual(app.dataframe[3].value.loc["Minimum", "Value"], 4)
         self.assertEqual(app.dataframe[3].value.loc["Maximum", "Value"], 12)
+        next(item for item in app.selectbox if item.label == "Chart type").set_value("Line").run()
         date_picker = next(item for item in app.selectbox if item.label == "Date column")
         self.assertIn("order_date", date_picker.options)
 
     def test_grouped_sales_totals_are_correct(self):
         app = run_with_upload("sample_sales.csv", SAMPLE.read_bytes())
-        next(item for item in app.selectbox if item.label == "Group by").set_value("region").run()
-        next(item for item in app.selectbox if item.label == "Numeric value").set_value("sales").run()
+        next(item for item in app.selectbox if item.label == "Category or group").set_value("region").run()
+        next(item for item in app.selectbox if item.label == "Measure").set_value("sales").run()
 
         self.assertFalse(app.exception)
         grouped = app.dataframe[4].value["Result"].to_dict()
@@ -65,6 +66,13 @@ class AppWorkflowTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(app.success[0].value, "Loaded 2 rows and 2 columns.")
 
+    def test_visualization_types_render_without_errors(self):
+        for chart_type in ["Bar", "Line", "Pie", "Scatter", "Histogram", "Box"]:
+            with self.subTest(chart_type=chart_type):
+                app = run_with_upload("sample_sales.csv", SAMPLE.read_bytes())
+                next(item for item in app.selectbox if item.label == "Chart type").set_value(chart_type).run()
+                self.assertFalse(app.exception, [error.message for error in app.exception])
+
     def test_invalid_empty_and_unsupported_data_show_messages(self):
         for filename, content in [("empty.csv", b""), ("broken.xlsx", b"not an Excel workbook")]:
             with self.subTest(filename=filename):
@@ -75,7 +83,8 @@ class AppWorkflowTests(unittest.TestCase):
         app = run_with_upload("text.csv", b"name,city\nA,Delhi\nB,Mumbai\n")
         self.assertFalse(app.exception)
         self.assertTrue(any("no numeric" in item.value.lower() for item in app.info))
-        self.assertTrue(any("needed for a trend chart" in item.value for item in app.info))
+        next(item for item in app.selectbox if item.label == "Chart type").set_value("Line").run()
+        self.assertTrue(any("needs more suitable columns" in item.value for item in app.info))
 
 
 if __name__ == "__main__":

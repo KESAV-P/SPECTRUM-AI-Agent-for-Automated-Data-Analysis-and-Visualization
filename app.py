@@ -2,6 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 
 st.set_page_config(page_title="SPECTRUM Data Analyst", page_icon="📊")
@@ -101,37 +102,68 @@ if uploaded_file is not None:
                     date_columns.append(column)
                     parsed_dates[column] = parsed
 
-            st.subheader("Compare categories")
+            st.subheader("Personalized visualizations")
             category_columns = [
                 column
                 for column in analysis_data.select_dtypes(exclude="number").columns
                 if column not in date_columns
             ]
-            if category_columns and numeric_columns:
-                category_column = st.selectbox("Group by", category_columns)
-                value_column = st.selectbox("Numeric value", numeric_columns)
-                aggregation = st.selectbox("Aggregation", ["Sum", "Average"])
-                grouped = analysis_data.groupby(category_column, dropna=False)[value_column]
-                chart_data = grouped.sum() if aggregation == "Sum" else grouped.mean()
-                chart_data = chart_data.sort_values(ascending=False)
-                st.dataframe(
-                    chart_data.rename("Result").to_frame(), width="stretch"
-                )
-                st.bar_chart(chart_data)
-            else:
-                st.info("A category column and a numeric column are needed for this chart.")
+            chart_type = st.selectbox(
+                "Chart type", ["Bar", "Line", "Pie", "Scatter", "Histogram", "Box"]
+            )
+            chart_theme = st.selectbox(
+                "Chart theme", ["plotly_white", "plotly", "plotly_dark", "ggplot2"]
+            )
 
-            st.subheader("Trend over time")
-            if date_columns and numeric_columns:
+            if chart_type in {"Bar", "Pie"} and category_columns and numeric_columns:
+                group_column = st.selectbox("Category or group", category_columns)
+                value_column = st.selectbox("Measure", numeric_columns)
+                aggregation = st.selectbox("Aggregation", ["Sum", "Average"])
+                grouped = analysis_data.groupby(group_column, dropna=False)[value_column]
+                values = grouped.sum() if aggregation == "Sum" else grouped.mean()
+                chart_frame = values.rename("Value").reset_index()
+                if chart_type == "Bar":
+                    figure = px.bar(chart_frame, x=group_column, y="Value", color=group_column, template=chart_theme)
+                else:
+                    figure = px.pie(chart_frame, names=group_column, values="Value", template=chart_theme)
+                st.dataframe(values.sort_values(ascending=False).rename("Result").to_frame(), width="stretch")
+                st.plotly_chart(figure, width="stretch")
+            elif chart_type == "Line" and date_columns and numeric_columns:
                 date_column = st.selectbox("Date column", date_columns)
-                trend_value = st.selectbox("Trend value", numeric_columns)
-                trend_data = pd.DataFrame(
-                    {"date": parsed_dates[date_column], "value": analysis_data[trend_value]}
-                ).dropna()
-                trend_data = trend_data.groupby("date", as_index=True)["value"].sum().sort_index()
-                if trend_data.empty:
+                value_column = st.selectbox("Trend measure", numeric_columns)
+                trend = pd.DataFrame(
+                    {"Date": parsed_dates[date_column], "Value": analysis_data[value_column]}
+                ).dropna().groupby("Date", as_index=False)["Value"].sum().sort_values("Date")
+                if trend.empty:
                     st.info("No valid date and numeric value pairs are available to chart.")
                 else:
-                    st.line_chart(trend_data)
+                    st.plotly_chart(px.line(trend, x="Date", y="Value", markers=True, template=chart_theme), width="stretch")
+            elif chart_type == "Scatter" and len(numeric_columns) >= 2:
+                x_column = st.selectbox("X axis", numeric_columns)
+                y_options = [column for column in numeric_columns if column != x_column]
+                y_column = st.selectbox("Y axis", y_options)
+                color_options = ["No color grouping", *category_columns]
+                color_column = st.selectbox("Color by", color_options)
+                figure = px.scatter(
+                    analysis_data,
+                    x=x_column,
+                    y=y_column,
+                    color=None if color_column == "No color grouping" else color_column,
+                    template=chart_theme,
+                )
+                st.plotly_chart(figure, width="stretch")
+            elif chart_type == "Histogram" and numeric_columns:
+                value_column = st.selectbox("Distribution measure", numeric_columns)
+                st.plotly_chart(px.histogram(analysis_data, x=value_column, template=chart_theme), width="stretch")
+            elif chart_type == "Box" and numeric_columns:
+                value_column = st.selectbox("Box plot measure", numeric_columns)
+                group_column = st.selectbox("Optional category", ["No grouping", *category_columns])
+                figure = px.box(
+                    analysis_data,
+                    y=value_column,
+                    x=None if group_column == "No grouping" else group_column,
+                    template=chart_theme,
+                )
+                st.plotly_chart(figure, width="stretch")
             else:
-                st.info("A date column and a numeric column are needed for a trend chart.")
+                st.info("This chart needs more suitable columns. Choose a chart supported by the available data.")

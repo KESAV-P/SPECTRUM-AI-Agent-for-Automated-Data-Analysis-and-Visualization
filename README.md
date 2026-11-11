@@ -4,7 +4,7 @@ SPECTRUM is a small, step-by-step learning project. This prototype uploads and p
 
 ## Current status
 
-The app currently supports CSV and Excel (`.xlsx`) files up to 25 MB. It reads the first worksheet in Excel files and shows row and column counts, inferred column types, per-column missing-value counts, and a ten-row preview. Users can filter rows by a category or numeric condition, summarize numeric columns, compare category totals or averages with a bar chart, and view a time trend when usable date data is present. Invalid or empty files show a clear message.
+The app currently supports CSV and Excel (`.xlsx`) files up to 25 MB. It reads the first worksheet in Excel files and shows row and column counts, inferred column types, per-column missing-value counts, and a ten-row preview. Users can filter rows, summarize numeric columns, and personalize visualizations by chart type (bar, line, pie, scatter, histogram, or box), selected columns, aggregation, and theme. Invalid or unsuitable inputs show a clear message. The autonomous LLM agent workflow is a planned next capability and is not implemented yet.
 
 ## Try the sample dataset
 
