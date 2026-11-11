@@ -40,3 +40,13 @@ if uploaded_file is not None:
             st.dataframe(missing_profile, width="stretch")
 
             st.dataframe(dataset.head(10), width="stretch")
+
+            st.subheader("Numeric summary")
+            numeric_columns = dataset.select_dtypes(include="number").columns.tolist()
+            if numeric_columns:
+                selected_column = st.selectbox("Choose a numeric column", numeric_columns)
+                summary = dataset[selected_column].agg(["count", "mean", "min", "max"])
+                summary.index = ["Count", "Mean", "Minimum", "Maximum"]
+                st.dataframe(summary.rename("Value").to_frame(), width="stretch")
+            else:
+                st.info("This dataset has no numeric columns to summarize.")
