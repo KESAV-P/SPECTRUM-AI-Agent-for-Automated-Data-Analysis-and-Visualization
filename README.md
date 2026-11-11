@@ -17,6 +17,8 @@ Example questions to explore manually:
 - How do sales change over time? (Choose `order_date` and `sales` in the trend section.)
 - Which rows have sales greater than 1,500? (Filter `sales` with `greater than` and `1500`.)
 
+For a step-by-step presentation walkthrough with expected results, see [DEMO.md](DEMO.md).
+
 ## Run locally
 
 From the project folder, create and activate a virtual environment:
