@@ -1,6 +1,6 @@
 # SPECTRUM — AI Agent for Automated Data Analysis and Visualization
 
-SPECTRUM is a small, step-by-step learning project. This prototype currently uploads and profiles tabular data; natural-language analysis and charts will be added in later steps.
+SPECTRUM is a small, step-by-step learning project. This prototype uploads and profiles tabular data, runs a limited set of deterministic analyses, and creates basic charts. Natural-language analysis is planned for a later step.
 
 ## Current status
 
@@ -37,3 +37,13 @@ Start the app:
 ```bash
 streamlit run app.py
 ```
+
+## Run the evaluation checks
+
+With the virtual environment active, run:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The checks cover CSV and Excel uploads, known summary/grouping values, filters, date trends, and common unsupported or invalid inputs. They do not evaluate natural-language agent accuracy because the agent is not implemented yet.

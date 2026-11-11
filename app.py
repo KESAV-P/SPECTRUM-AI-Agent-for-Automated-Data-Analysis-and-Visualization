@@ -77,22 +77,6 @@ if uploaded_file is not None:
             else:
                 st.info("No numeric values are available in the current selection.")
 
-            st.subheader("Compare categories")
-            category_columns = analysis_data.select_dtypes(exclude="number").columns.tolist()
-            if category_columns and numeric_columns:
-                category_column = st.selectbox("Group by", category_columns)
-                value_column = st.selectbox("Numeric value", numeric_columns)
-                aggregation = st.selectbox("Aggregation", ["Sum", "Average"])
-                grouped = analysis_data.groupby(category_column, dropna=False)[value_column]
-                chart_data = grouped.sum() if aggregation == "Sum" else grouped.mean()
-                chart_data = chart_data.sort_values(ascending=False)
-                st.dataframe(
-                    chart_data.rename("Result").to_frame(), width="stretch"
-                )
-                st.bar_chart(chart_data)
-            else:
-                st.info("A category column and a numeric column are needed for this chart.")
-
             date_columns = []
             parsed_dates = {}
             for column in analysis_data.columns:
@@ -107,6 +91,26 @@ if uploaded_file is not None:
                 if non_missing and int(parsed.notna().sum()) / non_missing >= 0.8:
                     date_columns.append(column)
                     parsed_dates[column] = parsed
+
+            st.subheader("Compare categories")
+            category_columns = [
+                column
+                for column in analysis_data.select_dtypes(exclude="number").columns
+                if column not in date_columns
+            ]
+            if category_columns and numeric_columns:
+                category_column = st.selectbox("Group by", category_columns)
+                value_column = st.selectbox("Numeric value", numeric_columns)
+                aggregation = st.selectbox("Aggregation", ["Sum", "Average"])
+                grouped = analysis_data.groupby(category_column, dropna=False)[value_column]
+                chart_data = grouped.sum() if aggregation == "Sum" else grouped.mean()
+                chart_data = chart_data.sort_values(ascending=False)
+                st.dataframe(
+                    chart_data.rename("Result").to_frame(), width="stretch"
+                )
+                st.bar_chart(chart_data)
+            else:
+                st.info("A category column and a numeric column are needed for this chart.")
 
             st.subheader("Trend over time")
             if date_columns and numeric_columns:
