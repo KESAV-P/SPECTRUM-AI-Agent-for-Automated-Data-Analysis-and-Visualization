@@ -1,8 +1,10 @@
 from pathlib import Path
+import os
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from agentic_workflow import run_analysis
 
 
 st.set_page_config(page_title="SPECTRUM Data Analyst", page_icon="📊")
@@ -167,3 +169,32 @@ if uploaded_file is not None:
                 st.plotly_chart(figure, width="stretch")
             else:
                 st.info("This chart needs more suitable columns. Choose a chart supported by the available data.")
+
+            st.subheader("Autonomous AI analyst")
+            st.caption("The planner selects an analysis, Python computes it, a validator checks it, and the reporter explains the result.")
+            question = st.text_input("Ask a question about this dataset", key="agent_question")
+            api_key = os.environ.get("GROQ_API_KEY", "")
+            if not api_key:
+                st.info("To enable the Groq analyst, set the GROQ_API_KEY environment variable and restart the app.")
+            if st.button("Analyze question", disabled=not api_key or not question.strip()):
+                try:
+                    with st.spinner("Planner, analyst, validator, and reporter are working…"):
+                        agent_result = run_analysis(
+                            question,
+                            analysis_data,
+                            api_key,
+                            model=os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b"),
+                        )
+                    st.markdown("#### Agent explanation")
+                    st.write(agent_result["explanation"])
+                    with st.status("Agent activity", state="complete", expanded=True):
+                        for step in agent_result["trace"]:
+                            st.write(f"**{step['step']}:** {step['detail']}")
+                        st.write("**Plan selected:**")
+                        st.json(agent_result["plan"])
+                    st.markdown("#### Verified calculation")
+                    st.json(agent_result["result"])
+                    if agent_result.get("figure") is not None:
+                        st.plotly_chart(agent_result["figure"], width="stretch")
+                except Exception as error:
+                    st.error(f"The analyst could not complete this question: {error}")
