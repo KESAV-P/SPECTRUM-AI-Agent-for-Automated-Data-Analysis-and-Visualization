@@ -1,0 +1,13 @@
+order_date,region,product,category,units,sales,profit
+2025-01-05,North,Desk,Office,8,2400,480
+2025-01-12,South,Chair,Office,12,1800,360
+2025-01-20,East,Monitor,Electronics,5,1500,300
+2025-02-03,West,Desk,Office,6,1800,360
+2025-02-11,North,Monitor,Electronics,4,1200,240
+2025-02-18,South,Lamp,Home,10,500,125
+2025-03-02,East,Chair,Office,9,1350,270
+2025-03-14,West,Monitor,Electronics,7,2100,420
+2025-03-25,North,Lamp,Home,6,300,75
+2025-04-04,South,Desk,Office,5,1500,300
+2025-04-16,East,Lamp,Home,8,400,
+2025-04-27,West,Chair,Office,11,1650,330
