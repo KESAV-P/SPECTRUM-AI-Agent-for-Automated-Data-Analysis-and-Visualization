@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 
@@ -8,6 +10,13 @@ st.title("SPECTRUM — AI Data Analyst")
 st.write("A beginner-friendly prototype for inspecting tabular data.")
 
 st.info("Upload a CSV or Excel (.xlsx) file up to 25 MB. Excel uploads use the first worksheet.")
+sample_file = Path(__file__).parent / "data" / "sample_sales.csv"
+st.download_button(
+    "Download sample sales CSV",
+    data=sample_file.read_bytes(),
+    file_name="sample_sales.csv",
+    mime="text/csv",
+)
 
 uploaded_file = st.file_uploader(
     "Choose a CSV or Excel file",
