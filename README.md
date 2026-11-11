@@ -4,7 +4,7 @@ SPECTRUM is being built as a small, step-by-step learning project. The first rel
 
 ## Current status
 
-The app currently supports CSV and Excel (`.xlsx`) upload, row and column counts, inferred column types, per-column missing-value counts, and a ten-row preview. Excel uploads read the first worksheet. Analysis will be added in a later, separately reviewed step.
+The app currently supports CSV and Excel (`.xlsx`) upload, row and column counts, inferred column types, per-column missing-value counts, and a ten-row preview. Excel uploads read the first worksheet. Invalid or empty files show a clear message. Analysis will be added in a later, separately reviewed step.
 
 ## Run locally
 
