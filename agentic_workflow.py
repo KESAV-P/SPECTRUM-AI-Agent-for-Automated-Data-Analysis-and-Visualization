@@ -23,13 +23,81 @@ class AnalysisState(TypedDict, total=False):
     explanation: str
     trace: list[dict[str, str]]
     error: str
+    offline: bool
 
 
 def _trace(state: AnalysisState, node: str, detail: str) -> list[dict[str, str]]:
     return [*state.get("trace", []), {"step": node, "detail": detail}]
 
 
+def _offline_plan(question: str, frame: pd.DataFrame) -> dict:
+    """Keyword-based rule planner that requires no API key."""
+    q = question.lower()
+
+    # Determine operation
+    if any(kw in q for kw in ["correlat", "relationship", "heatmap", "together"]):
+        operation = "correlation"
+    elif any(kw in q for kw in ["outlier", "anomal", "unusual", "extreme"]):
+        operation = "outlier_detection"
+    elif any(kw in q for kw in ["trend", "over time", "timeline", "by date", "time series"]):
+        operation = "time_trend"
+    elif any(kw in q for kw in ["group", "by region", "by product", "by category", "per ", "each "]):
+        operation = "grouped_analysis"
+    else:
+        operation = "numeric_summary"
+
+    # value_column: first numeric column
+    numeric_cols = frame.select_dtypes(include="number").columns.tolist()
+    value_column = numeric_cols[0] if numeric_cols else ""
+
+    # group_column: first non-numeric, non-date column
+    all_cols = frame.columns.tolist()
+    date_cols = [c for c in all_cols if "date" in c.lower()]
+    non_numeric_cols = frame.select_dtypes(exclude="number").columns.tolist()
+    non_date_non_numeric = [c for c in non_numeric_cols if c not in date_cols]
+    group_column = non_date_non_numeric[0] if non_date_non_numeric else ""
+
+    # date_column: column with "date" in name, else ""
+    date_column = date_cols[0] if date_cols else ""
+
+    # aggregation
+    aggregation = "sum" if ("total" in q or "sum" in q) else "average"
+
+    # chart_type
+    if operation == "correlation":
+        chart_type = "heatmap"
+    elif operation == "outlier_detection":
+        chart_type = "scatter"
+    elif operation == "time_trend":
+        chart_type = "line"
+    elif operation == "grouped_analysis":
+        if "pie" in q or "proportion" in q:
+            chart_type = "pie"
+        else:
+            chart_type = "bar"
+    else:  # numeric_summary
+        chart_type = "histogram"
+
+    return {
+        "operation": operation,
+        "value_column": value_column,
+        "group_column": group_column,
+        "date_column": date_column,
+        "aggregation": aggregation,
+        "chart_type": chart_type,
+    }
+
+
 def _plan_node(state: AnalysisState) -> dict[str, Any]:
+    # Offline mode: use keyword-based planner
+    if state.get("offline"):
+        frame = state["dataframe"]
+        plan = _offline_plan(state["question"], frame)
+        return {
+            "plan": plan,
+            "trace": _trace(state, "Planner (offline)", f"Selected {plan['operation']} on {plan['value_column']}."),
+        }
+
     frame = state["dataframe"]
     numeric = frame.select_dtypes(include="number").columns.tolist()
     if not numeric:
@@ -111,6 +179,30 @@ def _analysis_node(state: AnalysisState) -> dict[str, Any]:
         result = {"operation": operation, "date_column": date_column, "value_column": value_column,
                   "points": int(len(trend)), "start": trend["Date"].min().isoformat(),
                   "end": trend["Date"].max().isoformat(), "total": float(trend["Value"].sum())}
+    elif operation == "correlation":
+        numerics = frame.select_dtypes(include="number")
+        if numerics.shape[1] < 2:
+            raise ValueError("Correlation needs at least two numeric columns.")
+        corr = numerics.corr()
+        pairs = [
+            {"col_a": a, "col_b": b, "r": round(float(corr.loc[a, b]), 4)}
+            for a in corr.columns for b in corr.columns if a < b
+        ]
+        result = {"operation": operation, "pairs": pairs, "columns": list(numerics.columns)}
+    elif operation == "outlier_detection":
+        values = frame[value_column].dropna()
+        q1, q3 = float(values.quantile(0.25)), float(values.quantile(0.75))
+        iqr = q3 - q1
+        lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        mask = (frame[value_column] < lower) | (frame[value_column] > upper)
+        outlier_count = int(mask.sum())
+        result = {
+            "operation": operation, "column": value_column,
+            "q1": q1, "q3": q3, "iqr": round(iqr, 4),
+            "lower_fence": round(lower, 4), "upper_fence": round(upper, 4),
+            "outlier_count": outlier_count,
+            "total_rows": int(len(frame[value_column].dropna()))
+        }
     else:
         raise ValueError("Unsupported analysis operation.")
     return {"result": result,
@@ -139,6 +231,13 @@ def _visualizer_node(state: AnalysisState) -> dict[str, Any]:
         trend = pd.DataFrame({"Date": dates, "Value": frame[value_column]}).dropna()
         trend = trend.groupby("Date", as_index=False)["Value"].sum().sort_values("Date")
         figure = px.line(trend, x="Date", y="Value", markers=True, title=f"{value_column} over time")
+    elif operation == "correlation":
+        numerics = frame.select_dtypes(include="number")
+        corr = numerics.corr()
+        figure = px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu_r",
+                           zmin=-1, zmax=1, title="Correlation Heatmap")
+    elif operation == "outlier_detection":
+        figure = px.box(frame, y=value_column, title=f"Outlier view: {value_column}")
     return {"figure": figure, "trace": _trace(state, "Visualizer", f"Selected a {chart_type} chart for {operation}.")}
 
 
@@ -160,6 +259,19 @@ def _validation_node(state: AnalysisState) -> dict[str, Any]:
 
 
 def _report_node(state: AnalysisState) -> dict[str, Any]:
+    if state.get("offline"):
+        op = state["result"]["operation"]
+        col = state["result"].get("column") or state["result"].get("value_column", "")
+        templates = {
+            "numeric_summary": f"The numeric summary shows the count, mean, minimum, and maximum values for '{col}'. These descriptive statistics help understand the central tendency and spread of the data.",
+            "grouped_analysis": f"The grouped analysis aggregated '{col}' across categories. The result shows how values differ between groups, which helps identify which group contributes the most.",
+            "time_trend": f"The time trend analysis shows how '{col}' changed over time. Look for patterns such as growth, seasonality, or sudden changes.",
+            "correlation": "The correlation heatmap shows how strongly pairs of numeric columns are related. Values near +1 indicate a strong positive relationship, near -1 a strong negative one, and near 0 means little linear relationship.",
+            "outlier_detection": f"Outlier detection used the IQR (interquartile range) method on '{col}'. Points outside 1.5×IQR from the quartiles are flagged as outliers.",
+        }
+        explanation = templates.get(op, "Analysis completed. See the computed result below.")
+        return {"explanation": explanation, "trace": _trace(state, "Reporter (offline)", "Generated a template explanation from the computed result.")}
+
     response = state["client"].chat.completions.create(
         model=state["model"],
         temperature=0.2,
@@ -201,5 +313,18 @@ def run_analysis(question: str, dataframe: pd.DataFrame, api_key: str, model: st
         "dataframe": dataframe,
         "client": client,
         "model": model,
+        "trace": [],
+    })
+
+
+def run_offline_analysis(question: str, dataframe: pd.DataFrame) -> AnalysisState:
+    """Run the full workflow with no API key using the keyword-based planner."""
+    workflow = build_workflow()
+    return workflow.invoke({
+        "question": question,
+        "dataframe": dataframe,
+        "client": None,
+        "model": "",
+        "offline": True,
         "trace": [],
     })

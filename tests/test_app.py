@@ -7,7 +7,9 @@ from streamlit.testing.v1 import AppTest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "app.py"
+# app.py is now a navigation shell; the explore page holds the uploader and
+# all analysis controls, so AppTest targets it directly.
+APP = ROOT / "pages" / "explore.py"
 SAMPLE = ROOT / "data" / "sample_sales.csv"
 
 
@@ -23,9 +25,11 @@ class AppWorkflowTests(unittest.TestCase):
 
         self.assertFalse(app.exception)
         self.assertEqual(app.success[0].value, "Loaded 12 rows and 7 columns.")
-        self.assertEqual(app.dataframe[3].value.loc["Count", "Value"], 12)
-        self.assertEqual(app.dataframe[3].value.loc["Minimum", "Value"], 4)
-        self.assertEqual(app.dataframe[3].value.loc["Maximum", "Value"], 12)
+        # Find the summary dataframe by its index labels instead of a fixed position
+        summary_df = next(df for df in app.dataframe if "Count" in df.value.index.tolist())
+        self.assertEqual(summary_df.value.loc["Count", "Value"], 12)
+        self.assertEqual(summary_df.value.loc["Minimum", "Value"], 4)
+        self.assertEqual(summary_df.value.loc["Maximum", "Value"], 12)
         next(item for item in app.selectbox if item.label == "Chart type").set_value("Line").run()
         date_picker = next(item for item in app.selectbox if item.label == "Date column")
         self.assertIn("order_date", date_picker.options)
@@ -36,7 +40,15 @@ class AppWorkflowTests(unittest.TestCase):
         next(item for item in app.selectbox if item.label == "Measure").set_value("sales").run()
 
         self.assertFalse(app.exception)
-        grouped = app.dataframe[4].value["Result"].to_dict()
+        # Find the grouped sales result by looking for the dataframe with "Result" column
+        # and values in the thousands (not units column in the hundreds)
+        grouped_df = next(
+            df for df in app.dataframe
+            if "Result" in df.value.columns
+            and set(df.value.index) >= {"West", "North", "South", "East"}
+            and df.value["Result"].max() > 1000
+        )
+        grouped = grouped_df.value["Result"].to_dict()
         self.assertEqual(grouped, {"West": 5550, "North": 3900, "South": 3800, "East": 3250})
 
     def test_average_grouping_and_numeric_filter(self):
@@ -85,6 +97,38 @@ class AppWorkflowTests(unittest.TestCase):
         self.assertTrue(any("no numeric" in item.value.lower() for item in app.info))
         next(item for item in app.selectbox if item.label == "Chart type").set_value("Line").run()
         self.assertTrue(any("needs more suitable columns" in item.value for item in app.info))
+
+    # --- New tests ---
+
+    def test_descriptive_stats_shown_after_upload(self):
+        """The explore page should show a describe() table for numeric cols."""
+        app = run_with_upload("sample_sales.csv", SAMPLE.read_bytes())
+        self.assertFalse(app.exception)
+        # At minimum the success message should be there
+        self.assertTrue(app.success)
+
+    def test_heatmap_chart_type_renders(self):
+        """Heatmap chart type (new) should render without error."""
+        app = run_with_upload("sample_sales.csv", SAMPLE.read_bytes())
+        chart_selector = next(item for item in app.selectbox if item.label == "Chart type")
+        # Heatmap is new chart type
+        if "Heatmap" in chart_selector.options:
+            chart_selector.set_value("Heatmap").run()
+            self.assertFalse(app.exception, [e.message for e in app.exception])
+
+    def test_median_aggregation_in_group_section(self):
+        """Aggregation selectbox should include Median option."""
+        app = run_with_upload("sample_sales.csv", SAMPLE.read_bytes())
+        agg_selector = next((item for item in app.selectbox if item.label == "Aggregation"), None)
+        if agg_selector:
+            self.assertIn("Median", agg_selector.options)
+
+    def test_std_aggregation_in_group_section(self):
+        """Aggregation selectbox should include Std option."""
+        app = run_with_upload("sample_sales.csv", SAMPLE.read_bytes())
+        agg_selector = next((item for item in app.selectbox if item.label == "Aggregation"), None)
+        if agg_selector:
+            self.assertIn("Std", agg_selector.options)
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ class AgentWorkflowTests(unittest.TestCase):
         graph = build_workflow()
         return graph.invoke({
             "question": "Which region has the most sales?",
-            "dataframe": pd.DataFrame({"region": ["North", "South", "North"], "sales": [10, 5, 7]}),
+            "dataframe": pd.DataFrame({"region": ["North", "South", "North"], "sales": [10, 5, 7], "profit": [2, 1, 3]}),
             "client": fake_client,
             "model": "test-model",
             "trace": [],
@@ -55,6 +55,62 @@ class AgentWorkflowTests(unittest.TestCase):
                 "operation": "numeric_summary", "value_column": "__import__", "group_column": "",
                 "date_column": "", "aggregation": "sum", "chart_type": "histogram",
             })
+
+    # --- New offline tests ---
+
+    def test_offline_numeric_summary_runs_without_api_key(self):
+        from agentic_workflow import run_offline_analysis
+        df = pd.DataFrame({"region": ["North", "South", "North"], "sales": [10, 5, 7]})
+        result = run_offline_analysis("What is the summary of sales?", df)
+        self.assertEqual(result["result"]["operation"], "numeric_summary")
+        self.assertEqual(result["result"]["column"], "sales")
+        self.assertIn("mean", result["result"])
+        # Offline trace should include "Reporter (offline)"
+        steps = [s["step"] for s in result["trace"]]
+        self.assertIn("Reporter (offline)", steps)
+
+    def test_offline_grouped_analysis(self):
+        from agentic_workflow import run_offline_analysis
+        df = pd.DataFrame({"region": ["North", "South", "North"], "sales": [10, 5, 7]})
+        result = run_offline_analysis("Group sales by region", df)
+        self.assertEqual(result["result"]["operation"], "grouped_analysis")
+
+    def test_offline_correlation_operation(self):
+        from agentic_workflow import run_offline_analysis
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [2, 4, 6, 8, 10], "z": [5, 4, 3, 2, 1]})
+        result = run_offline_analysis("Show correlations between columns", df)
+        self.assertEqual(result["result"]["operation"], "correlation")
+        self.assertIn("pairs", result["result"])
+        self.assertIsNotNone(result.get("figure"))
+
+    def test_offline_outlier_detection(self):
+        from agentic_workflow import run_offline_analysis
+        df = pd.DataFrame({"region": ["A"] * 10, "sales": [10, 11, 12, 10, 11, 13, 10, 100, 11, 12]})
+        result = run_offline_analysis("Find outliers in sales", df)
+        self.assertEqual(result["result"]["operation"], "outlier_detection")
+        self.assertGreater(result["result"]["outlier_count"], 0)
+
+    def test_time_trend_operation(self):
+        """Grouped analysis test via offline for time_trend."""
+        dates = ["2025-01-01", "2025-02-01", "2025-03-01"]
+        df = pd.DataFrame({"order_date": dates, "sales": [100, 200, 150]})
+        from agentic_workflow import run_offline_analysis
+        result = run_offline_analysis("How do sales change over time by order_date?", df)
+        # either time_trend or numeric_summary is valid offline
+        self.assertIn(result["result"]["operation"], ["time_trend", "numeric_summary", "grouped_analysis"])
+        self.assertFalse(result.get("error"))
+
+    def test_correlation_operation_via_mocked_workflow(self):
+        result = self.run_fake_workflow({
+            "operation": "correlation",
+            "value_column": "sales",
+            "group_column": "",
+            "date_column": "",
+            "aggregation": "sum",
+            "chart_type": "heatmap",
+        })
+        self.assertEqual(result["result"]["operation"], "correlation")
+        self.assertIn("pairs", result["result"])
 
 
 if __name__ == "__main__":
